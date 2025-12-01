@@ -1,0 +1,101 @@
+automation_spec:
+  name: "cisco_ios_configuration_backup"
+  description: "Automated backup and version control of Cisco IOS device configurations"
+  
+  target_devices:
+    - type: "cisco_ios"
+      count: 50
+      connection: "network_cli"
+      platform: "ios"
+    
+    - type: "cisco_nxos"
+      count: 20
+      connection: "network_cli"
+      platform: "nxos"
+  
+  variables:
+    backup_dir: "/var/backups/network"
+    retention_days: 30
+    git_repo: "git@github.com:company/network-configs.git"
+    notification_email: "netops@company.com"
+  
+  tasks:
+    - name: "Gather device facts"
+      action: "ios_facts"
+      gather_subset:
+        - "config"
+        - "hardware"
+      register: "device_facts"
+    
+    - name: "Backup running configuration"
+      action: "ios_command"
+      commands:
+        - "show running-config"
+      register: "running_config"
+    
+    - name: "Backup startup configuration"
+      action: "ios_command"
+      commands:
+        - "show startup-config"
+      register: "startup_config"
+    
+    - name: "Save configuration to file"
+      action: "copy"
+      content: "{{ running_config.stdout[0] }}"
+      dest: "{{ backup_dir }}/{{ inventory_hostname }}/{{ ansible_date_time.date }}_running.cfg"
+    
+    - name: "Commit to version control"
+      action: "git"
+      repo: "{{ git_repo }}"
+      dest: "{{ backup_dir }}"
+      version: "main"
+      update: true
+    
+    - name: "Send notification on completion"
+      action: "mail"
+      to: "{{ notification_email }}"
+      subject: "Network backup completed - {{ ansible_date_time.date }}"
+      body: "Successfully backed up {{ ansible_play_hosts | length }} devices"
+  
+  handlers:
+    - name: "Clean old backups"
+      action: "find"
+      paths: "{{ backup_dir }}"
+      age: "{{ retention_days }}d"
+      register: "old_backups"
+    
+    - name: "Remove old backups"
+      action: "file"
+      path: "{{ item.path }}"
+      state: "absent"
+      loop: "{{ old_backups.files }}"
+  
+  requirements:
+    ansible_version: ">=2.15.0"
+    python_version: ">=3.9"
+    collections:
+      - cisco.ios
+      - cisco.nxos
+      - community.general
+      - ansible.netcommon
+    python_packages:
+      - netmiko>=4.0.0
+      - paramiko>=2.8.0
+      - gitpython>=3.1.0
+  
+  cicd:
+    platform: "github_actions"
+    test_on:
+      - "push"
+      - "pull_request"
+    deploy_on:
+      - "main"
+    schedule: "0 2 * * *"  # Daily at 2 AM
+    notifications:
+      slack_webhook: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+  
+  tags:
+    - "backup"
+    - "network"
+    - "cisco"
+    - "production"
