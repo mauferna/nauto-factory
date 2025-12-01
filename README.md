@@ -269,7 +269,7 @@ MIT License
 
 ### Author
 
-Capstone Project - 5-Day AI Agents Intensive Course (Nov 2024)
+Capstone Project - 5-Day AI Agents Intensive Course (Nov 2025)
 
 ---
 
